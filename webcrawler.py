@@ -1,3 +1,9 @@
+""" 
+A multithreaded web crawler which fetches URLs and outputs crawl results to standard output and logs the errors into error_logs.log 
+Author: Aman Bhatia
+Date: 03/16/2020
+""" 
+
 from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
 from collections import deque
@@ -7,17 +13,16 @@ import sys
 import logging
 import time
 
-
+#variables that will be used throughout the application
 visited_url_lock = Lock()
-queue_add_lock = Lock()
-queue_poll_lock = Lock()
 error_log = "error_logs.log"
 logging.basicConfig(filename = error_log, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-#This method is used to fetch the html document from the url
+#fetch the html document as text from the url and return
+#if an error is encountered, log it
 def get_html(url):
     html_doc = 'error'
     try:
@@ -28,10 +33,9 @@ def get_html(url):
     finally:
         return html_doc
 
-#This method adds the url to the visited set
-#The add method is synchronized
-#since each thread uses the set, any manipulation on set
-#must be atomic, to ensure synchronization
+ 
+#Add the url to the visited_urls set
+#synchronization ensures thread safety and consistency
 def add_to_visited_urls(url,visited_urls):
     add_url = url
     if url.startswith('https://'):
@@ -46,9 +50,8 @@ def add_to_visited_urls(url,visited_urls):
     visited_urls.add(add_url)
     visited_url_lock.release()
 
-
-#This method checks if the url under observation
-#is already visited. If it is, we wont parse it again
+#return true if the url is already visited
+#return false otherwise
 def find_duplicate_url(url,visited_urls):
 
     search_string = url
@@ -65,9 +68,13 @@ def find_duplicate_url(url,visited_urls):
         return True
     return False
 
-#this method represents each task that must be performed
-#by each thread
-def task(url, queue, visited_urls):
+#Each task is a unit of execution 
+#parse the document to find urls
+#print the url and the urls contained within it
+#add the url to visited_urls set
+#add the contained urls to an unvisited queue(for later polling), if they are not visited
+#if the url is already visited, do not process it
+def task(url, unvisited_url_queue, visited_urls):
 
     visited_url_lock.acquire()
     if find_duplicate_url(url,visited_urls):
@@ -97,42 +104,38 @@ def task(url, queue, visited_urls):
                     continue
                 else:
                     visited_url_lock.release()
-                    add_to_queue(link,queue)
+                    unvisited_url_queue.append(link)
             
-#Method to add unvisited urls to the queue
-#for later parsing
-def add_to_queue(url,queue):
-    queue_add_lock.acquire()
-    queue.append(url)
-    queue_add_lock.release()
-
-
-#method that spawns threads to handle various sub url parsing
-def find_links(queue,visited_urls):
-    executor = ThreadPoolExecutor(max_workers = 20)
+#poll a url to visit from the queue
+#submit a task to the executor to process the polled url
+def find_links(unvisited_url_queue,visited_urls):
+    executor = ThreadPoolExecutor(max_workers = 30)
 
     while(True):
-        while (len(queue) != 0):
-            queue_poll_lock.acquire()
-            url = queue.popleft()
-            queue_poll_lock.release()
-            executor.submit(task(url,queue, visited_urls))
+        while (len(unvisited_url_queue) != 0):
+            url = unvisited_url_queue.popleft()
+            executor.submit(task(url,unvisited_url_queue, visited_urls))
         executor.shutdown(wait = True)
-        if(len(queue)==0):
+        if(len(unvisited_url_queue)==0):
             break
 
-#main method
-#entry point of the program
-#here the parsing also gets done for the roor url(passed in as a command line argument)
+
+#starting point of the web crawler application
+#parses the root url and puts the url's contained
+#in the root, inside queue for later polling
 def main():
-    queue = deque()
+
+    #I haven't used any synchronization for my unvisited_url_queue since the documentation says that appends and pops are thread safe in dequeues
+    #source https://docs.python.org/2/library/collections.html#collections.deque
+    unvisited_url_queue = deque()
     visited_urls = set()
     url = sys.argv[1];
     add_to_visited_urls(url,visited_urls)
-    add_to_queue(url,queue)
+    unvisited_url_queue.append(url)
+
     #for the first time we have to populate links so that each thread can work on them
     links = []
-    url = queue.popleft()
+    url = unvisited_url_queue.popleft()
     source = get_html(url)
     if source == 'error':
         pass
@@ -153,10 +156,10 @@ def main():
                 continue
             else:
                 visited_url_lock.release()
-                add_to_queue(link,queue)
-        find_links(queue,visited_urls)
+                unvisited_url_queue.append(link)
+        find_links(unvisited_url_queue,visited_urls)
 
 
-
+#start main as the first function that runs
 if __name__ == '__main__':
     main()
