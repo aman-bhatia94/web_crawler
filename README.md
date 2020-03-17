@@ -22,7 +22,7 @@ A multi threaded web crawler written in Python that crawls urls on a web page an
 
 # Testing
 - Tested the crawler on a few urls
-- The following shows screenshots of the application running with python3 webcrawler.py "https://www.rescale.com"
+- The following shows a few screenshots(the crawler keeps running, but here I have captured 5 screenshots as an example) of the application running with python3 webcrawler.py "https://www.rescale.com"
 - ![alt text](https://github.com/aman-bhatia94/web_crawler_screenshots/blob/master/scrrenshots/screenshot1.png)
 - ![alt text](https://github.com/aman-bhatia94/web_crawler_screenshots/blob/master/scrrenshots/screenshot2.png)
 - ![alt text](https://github.com/aman-bhatia94/web_crawler_screenshots/blob/master/scrrenshots/screenshot3.png)
