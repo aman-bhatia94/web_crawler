@@ -19,6 +19,9 @@ A multi threaded web crawler written in Python that crawls urls on a web page an
   - Beautiful Soup [source](https://www.crummy.com/software/BeautifulSoup/bs4/doc/) 
   - Requests [source](https://requests.readthedocs.io/en/master/)
   - lxml [source](https://pypi.org/project/lxml/)
+  
+# Time Taken
+Time taken to complete: 2.5 hours 
 
 # Testing
 - Tested the crawler on a few urls
