@@ -16,6 +16,8 @@ logging.basicConfig(filename = error_log, format='%(asctime)s - %(levelname)s - 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
+
+#This method is used to fetch the html document from the url
 def get_html(url):
     html_doc = 'error'
     try:
@@ -26,6 +28,10 @@ def get_html(url):
     finally:
         return html_doc
 
+#This method adds the url to the visited set
+#The add method is synchronized
+#since each thread uses the set, any manipulation on set
+#must be atomic, to ensure synchronization
 def add_to_visited_urls(url,visited_urls):
     add_url = url
     if url.startswith('https://'):
@@ -41,6 +47,8 @@ def add_to_visited_urls(url,visited_urls):
     visited_url_lock.release()
 
 
+#This method checks if the url under observation
+#is already visited. If it is, we wont parse it again
 def find_duplicate_url(url,visited_urls):
 
     search_string = url
@@ -53,12 +61,12 @@ def find_duplicate_url(url,visited_urls):
     if search_string.endswith('/'):
         search_string = search_string[ :-1]
 
-    #visited_url_lock.acquire()
     if search_string in visited_urls:
         return True
     return False
-    #visited_url_lock.release()
 
+#this method represents each task that must be performed
+#by each thread
 def task(url, queue, visited_urls):
 
     visited_url_lock.acquire()
@@ -81,27 +89,25 @@ def task(url, queue, visited_urls):
                     links.append(href_string)
             print(url)
             add_to_visited_urls(url,visited_urls)
-            #visited_urls.add(url)
             for link in links:
                 print("\t"+link)
                 visited_url_lock.acquire()
                 if find_duplicate_url(link,visited_urls):
-                    #print("alread visited"+link)
                     visited_url_lock.release()
                     continue
                 else:
                     visited_url_lock.release()
-                    #queue.append(link)
                     add_to_queue(link,queue)
             
-
+#Method to add unvisited urls to the queue
+#for later parsing
 def add_to_queue(url,queue):
     queue_add_lock.acquire()
     queue.append(url)
     queue_add_lock.release()
 
 
-
+#method that spawns threads to handle various sub url parsing
 def find_links(queue,visited_urls):
     executor = ThreadPoolExecutor(max_workers = 20)
 
@@ -115,25 +121,20 @@ def find_links(queue,visited_urls):
         if(len(queue)==0):
             break
 
-
+#main method
+#entry point of the program
+#here the parsing also gets done for the roor url(passed in as a command line argument)
 def main():
     queue = deque()
     visited_urls = set()
     url = sys.argv[1];
     add_to_visited_urls(url,visited_urls)
-    #visited_urls.add(url)
-    #print(visited_urls)
-    #queue.append(url)
     add_to_queue(url,queue)
     #for the first time we have to populate links so that each thread can work on them
     links = []
-    #queue_poll_lock.acquire()
     url = queue.popleft()
-    #queue_poll_lock.release()
     source = get_html(url)
     if source == 'error':
-        #do not process initial step itself
-        #error is already logged
         pass
     else:
         soup = BeautifulSoup(source, 'lxml')
@@ -143,7 +144,6 @@ def main():
                 links.append(href_string)
                     
         print(url)
-        #visited_urls.add(url)
         add_to_visited_urls(url,visited_urls)
         for link in links:
             print("\t"+link)
@@ -152,7 +152,6 @@ def main():
                 visited_url_lock.release()
                 continue
             else:
-                #queue.append(link)
                 visited_url_lock.release()
                 add_to_queue(link,queue)
         find_links(queue,visited_urls)
